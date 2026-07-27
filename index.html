@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Terraria 2D</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            text-align: center;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            background: #5c94fc;
+            display: block;
+            margin: 10px auto;
+            border: 2px solid #fff;
+        }
+        .controls, .game-ui {
+            margin-top: 5px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            margin: 4px;
+            background: #333;
+            color: white;
+            border: 1px solid #777;
+            border-radius: 5px;
+            cursor: pointer;
+            user-select: none;
+        }
+        button:active {
+            background: #555;
+        }
+        #destroyButton {
+            background-color: #8b0000;
+        }
+        #destroyButton:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        #inventory {
+            margin-top: 5px;
+            font-size: 16px;
+            display: inline-block;
+            padding: 5px 10px;
+            background: #222;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Mini Terraria 2D</h2>
+    <canvas id="gameCanvas" width="400" height="300"></canvas>
+    
+    <div class="controls">
+        <button onclick="move(-1)">Kiri</button>
+        <button onclick="jump()">Lompat</button>
+        <button onclick="move(1)">Kanan</button>
+    </div>
+    
+    <div class="game-ui">
+        <button id="destroyButton" onclick="tryDestroy()" disabled>Tebang Pohon</button>
+        <br>
+        <div id="inventory">Kayu: 0</div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const destroyButton = document.getElementById("destroyButton");
+    const inventoryDisplay = document.getElementById("inventory");
+
+    // Properti Karakter
+    let player = {
+        x: 180,
+        y: 200,
+        width: 24,
+        height: 36,
+        speed: 6,
+        vy: 0,
+        gravity: 0.6,
+        isJumping: false,
+        facing: 1
+    };
+
+    let groundY = 260;
+    let trees = [];
+    let inventory = { wood: 0 };
+    let canDestroy = false;
+
+    // Fungsi membuat pohon kotak-kotak
+    function spawnTree(x, heightInBlocks) {
+        let treeBlocks = [];
+        for (let i = 0; i < heightInBlocks; i++) {
+            treeBlocks.push({
+                x: x,
+                y: groundY - (i + 1) * 24,
+                width: 24,
+                height: 24,
+                type: (i === heightInBlocks - 1) ? 'leaves' : 'log'
+            });
+        }
+        trees.push(treeBlocks);
+    }
+
+    // Inisialisasi Pohon
+    spawnTree(60, 4);
+    spawnTree(300, 5);
+
+    function move(dir) {
+        player.x += dir * player.speed;
+        player.facing = dir;
+        if (player.x < 0) player.x = 0;
+        if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+    }
+
+    function jump() {
+        if (!player.isJumping) {
+            player.vy = -11;
+            player.isJumping = true;
+        }
+    }
+
+    function tryDestroy() {
+        for (let t = 0; t < trees.length; t++) {
+            let tree = trees[t];
+            if (tree.length > 0) {
+                let block = tree[0];
+                let dist = Math.abs(player.x + player.width/2 - (block.x + block.width/2));
+                if (dist < 50) {
+                    if (block.type === 'log') {
+                        inventory.wood += 4;
+                    } else {
+                        inventory.wood += 1;
+                    }
+                    tree.shift();
+                    inventoryDisplay.innerText = "Kayu: " + inventory.wood;
+                    return;
+                }
+            }
+        }
+    }
+
+    function update() {
+        player.vy += player.gravity;
+        player.y += player.vy;
+
+        if (player.y >= groundY - player.height) {
+            player.y = groundY - player.height;
+            player.vy = 0;
+            player.isJumping = false;
+        }
+
+        canDestroy = false;
+        for (let t = 0; t < trees.length; t++) {
+            for (let b = 0; b < trees[t].length; b++) {
+                let block = trees[t][b];
+                let dx = Math.abs(player.x + player.width/2 - (block.x + block.width/2));
+                let dy = Math.abs(player.y + player.height/2 - (block.y + block.height/2));
+                if (dx < 50 && dy < 80) {
+                    canDestroy = true;
+                    break;
+                }
+            }
+            if (canDestroy) break;
+        }
+        destroyButton.disabled = !canDestroy;
+    }
+
+    function draw() {
+        // Langit
+        ctx.fillStyle = "#5c94fc";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Tanah
+        ctx.fillStyle = "#8B4513"; 
+        ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+        ctx.fillStyle = "#228B22"; 
+        ctx.fillRect(0, groundY, canvas.width, 10);
+
+        // Gambar Pohon
+        for (let t = 0; t < trees.length; t++) {
+            let tree = trees[t];
+            for (let b = 0; b < tree.length; b++) {
+                let block = tree[b];
+                ctx.fillStyle = (block.type === 'log') ? "#5D4037" : "#66BB6A";
+                ctx.fillRect(block.x, block.y, block.width, block.height);
+                ctx.strokeStyle = "#3e2723";
+                ctx.strokeRect(block.x, block.y, block.width, block.height);
+            }
+        }
+
+        // Gambar Karakter Pixel (Otomatis muncul tanpa file gambar eksternal)
+        ctx.fillStyle = "#b52b2b"; // Baju karakter
+        ctx.fillRect(player.x, player.y + 12, player.width, player.height - 12);
+        
+        ctx.fillStyle = "#e0ac69"; // Kepala karakter
+        ctx.fillRect(player.x + 4, player.y, 16, 14);
+        
+        ctx.fillStyle = "#4a2810"; // Rambut karakter
+        ctx.fillRect(player.x + 4, player.y, 16, 6);
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // Jalankan game langsung
+    loop();
+</script>
+
+</body>
+</html>
+            }
+            if (canDestroy) break;
+        }
+        
+        // Aktifkan/Nonaktifkan tombol hancur
+        destroyButton.disabled = !canDestroy;
+    }
+
+    function draw() {
+        // Bersihkan layar
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Gambar Langit
+        ctx.fillStyle = "#5c94fc";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Gambar Tanah
+        ctx.fillStyle = "#8B4513"; 
+        ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+        ctx.fillStyle = "#228B22"; 
+        ctx.fillRect(0, groundY, canvas.width, 10);
+
+        // --- GAMBAR POHON ---
+        for (let t = 0; t < trees.length; t++) {
+            let tree = trees[t];
+            for (let b = 0; b < tree.length; b++) {
+                let block = tree[b];
+                if (block.type === 'log') {
+                    ctx.fillStyle = "#5D4037"; // Coklat tua untuk batang
+                } else {
+                    ctx.fillStyle = "#66BB6A"; // Hijau terang untuk daun
+                }
+                ctx.fillRect(block.x, block.y, block.width, block.height);
+                // Tambahkan garis kisi untuk efek kotak-kotak
+                ctx.strokeStyle = "#3e2723";
+                ctx.strokeRect(block.x, block.y, block.width, block.height);
+            }
+        }
+
+        // --- GAMBAR PEMAIN ---
+        ctx.save(); // Simpan state canvas sebelum transformasi
+        
+        // Balik gambar jika karakter menghadap kiri
+        if (player.facing === -1) {
+            ctx.scale(-1, 1);
+            // Gambar di posisi yang sudah di-flip
+            ctx.drawImage(playerSprite, -player.x - player.width, player.y, player.width, player.height);
+        } else {
+            // Gambar normal
+            ctx.drawImage(playerSprite, player.x, player.y, player.width, player.height);
+        }
+        
+        ctx.restore(); // Kembalikan state canvas
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // Pastikan gambar termuat sebelum memulai game loop
+    playerSprite.onload = function() {
+        loop();
+    };
+
+    // Fail-safe: jika gambar gagal dimuat, tetap jalankan loop
+    playerSprite.onerror = function() {
+        console.error("Gagal memuat gambar karakter. Menggunakan kotak merah sebagai fallback.");
+        player.color = "red";
+        player.draw = function() {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        };
+        // Override fungsi draw untuk menggunakan fallback
+        draw = function() {
+             // ... (isi draw fallback)
+        };
+        loop();
+    };
+</script>
+
+</body>
+</html>
+mal.z;
+    if(!(Math.abs(nx-pemain.x)<0.6&&Math.abs(ny-pemain.y-1)<1.8&&Math.abs(nz-pemain.z)<0.6)){
+      dunia[`${nx},${ny},${nz}`]=pilihBlok;mouse.klik=null;
+    }
+  }
+  if(tem&&mouse.klik==='right'){
+    delete dunia[`${tem.pos.x},${tem.pos.y},${tem.pos.z}`];mouse.klik=null;
+  }
+
+  // Gambar
+  gl.clearColor(0.5,0.7,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const pj=perspektif(mat4(),70*Math.PI/180,canvas.width/canvas.height,0.1,64);
+  const vw=lihat(mat4(),pemain.x,pemain.y+1.6,pemain.z,
+    pemain.x-Math.sin(pemain.ry)*Math.cos(pemain.rx),
+    pemain.y+1.6+Math.sin(pemain.rx),
+    pemain.z-Math.cos(pemain.ry)*Math.cos(pemain.rx),
+    0,1,0);
+  gl.uniformMatrix4fv(lok.pj,false,pj);
+  gl.uniformMatrix4fv(lok.v,false,vw);
+  Object.keys(dunia).forEach(k=>{const [x,y,z]=k.split(',').map(Number);gambarBlok(x,y,z,dunia[k]);});
+  requestAnimationFrame(lingkar);
+}
+lingkar();
+</script>
+</body>
+</html>
