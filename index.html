@@ -27,37 +27,39 @@
         .ui-container {
             display: flex;
             gap: 10px;
-            margin-top: 10px;
+            margin-top: 8px;
             background: #222;
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 8px;
             border: 1px solid #444;
         }
         .slot {
             width: 45px;
-            height: 45px;
+            height: 40px;
             background: #333;
             border: 2px solid #666;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 10px;
             border-radius: 5px;
         }
         .slot span {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             color: #ffcc00;
         }
         .controls {
-            margin-top: 10px;
+            margin-top: 8px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         button {
-            padding: 10px 18px;
-            font-size: 16px;
+            padding: 10px 15px;
+            font-size: 14px;
             background: #444;
             color: white;
             border: none;
@@ -68,11 +70,17 @@
         button:active {
             background: #666;
         }
+        .btn-action {
+            background: #2e7d32;
+        }
+        .btn-action:active {
+            background: #1b5e20;
+        }
     </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="600" height="400"></canvas>
+    <canvas id="gameCanvas" width="600" height="380"></canvas>
 
     <div class="ui-container">
         <div class="slot">🪵 Kayu <span id="inv-wood">0</span></div>
@@ -83,7 +91,8 @@
     <div class="controls">
         <button id="btn-left">◀ Kiri</button>
         <button id="btn-jump">Loncat 🦘</button>
-        <button id="btn-action">Tebang/Gali ⛏️</button>
+        <button id="btn-chop" class="btn-action">Tebang 🪵</button>
+        <button id="btn-dig" class="btn-action">Gali ⛏️</button>
         <button id="btn-right">Kanan ▶</button>
     </div>
 
@@ -93,18 +102,23 @@
 
         const tileSize = 30;
         const mapWidth = 60; 
-        const mapHeight = 15;
+        const mapHeight = 14;
         
         let world = [];
         for (let y = 0; y < mapHeight; y++) {
             let row = [];
             for (let x = 0; x < mapWidth; x++) {
-                if (y < 4) row.push(0); // Udara
-                else if (y === 4) {
-                    if (x % 8 === 0 && x > 5 && x < mapWidth - 5) row.push(3); // Batang Pohon
+                if (y < 3) row.push(0); // Udara atas
+                else if (y === 3 || y === 4) {
+                    // Pohon tinggi (Batang di y=3 & y=4, Daun di atasnya)
+                    if (x % 9 === 0 && x > 4 && x < mapWidth - 4) row.push(3); // Batang Kayu
                     else row.push(0);
                 }
-                else if (y === 5) row.push(1); // Tanah atas
+                else if (y === 5) {
+                    // Daun Pohon di puncak atau tanah
+                    if (x % 9 === 0 && x > 4 && x < mapWidth - 4) row.push(4); // Daun Pohon
+                    else row.push(1); // Tanah atas
+                }
                 else if (y < 10) row.push(1); // Tanah bawah
                 else row.push(2); // Batu
             }
@@ -114,17 +128,19 @@
         let player = {
             x: 100,
             y: 90,
-            width: 30,  // Ukuran dikembalikan seperti semula
-            height: 40,
+            width: 26,
+            height: 38,
             vx: 0,
             vy: 0,
             speed: 3,
+            direction: 1, // 1 ke kanan, -1 ke kiri
             isGrounded: false
         };
 
         let inventory = { wood: 0, stone: 0, dirt: 0 };
         let keys = { left: false, right: false };
 
+        // Kontrol Tombol Sentuh / Tahan
         document.getElementById("btn-left").addEventListener("pointerdown", () => keys.left = true);
         document.getElementById("btn-left").addEventListener("pointerup", () => keys.left = false);
         document.getElementById("btn-left").addEventListener("pointerleave", () => keys.left = false);
@@ -140,30 +156,42 @@
             }
         });
 
-        document.getElementById("btn-action").addEventListener("click", () => {
+        // Tombol TEBANG (Menebang batang/daun pohon di depan karakter)
+        document.getElementById("btn-chop").addEventListener("click", () => {
             let pCol = Math.floor((player.x + player.width / 2) / tileSize);
-            let pRow = Math.floor((player.y + player.height) / tileSize);
+            let pRow = Math.floor((player.y + player.height / 2) / tileSize);
+            let targetCol = pCol + player.direction; // Cek blok di depan arah hadap pemain
 
-            let targets = [
-                {r: pRow, c: pCol},
-                {r: pRow + 1, c: pCol},
-                {r: pRow, c: pCol + 1},
-                {r: pRow, c: pCol - 1},
-                {r: pRow - 1, c: pCol}
-            ];
-
-            for (let t of targets) {
-                if (t.r >= 0 && t.r < mapHeight && t.c >= 0 && t.c < mapWidth) {
-                    let blockType = world[t.r][t.c];
-                    if (blockType > 0) {
-                        if (blockType === 3) inventory.wood++;
-                        else if (blockType === 2) inventory.stone++;
-                        else if (blockType === 1) inventory.dirt++;
-
-                        world[t.r][t.c] = 0;
+            // Cek beberapa baris di depan
+            let checkRows = [pRow, pRow - 1, pRow + 1];
+            for (let r of checkRows) {
+                if (r >= 0 && r < mapHeight && targetCol >= 0 && targetCol < mapWidth) {
+                    let blockType = world[r][targetCol];
+                    if (blockType === 3 || blockType === 4) { // Jika ketemu pohon/daun
+                        inventory.wood++;
+                        world[r][targetCol] = 0;
                         updateInventoryUI();
                         break;
                     }
+                }
+            }
+        });
+
+        // Tombol GALI (Menggali tanah atau batu di bawah kaki karakter)
+        document.getElementById("btn-dig").addEventListener("click", () => {
+            let pCol = Math.floor((player.x + player.width / 2) / tileSize);
+            let groundRow = Math.floor((player.y + player.height + 2) / tileSize); // Tepat di bawah kaki
+
+            if (groundRow >= 0 && groundRow < mapHeight && pCol >= 0 && pCol < mapWidth) {
+                let blockType = world[groundRow][pCol];
+                if (blockType === 1) { // Tanah
+                    inventory.dirt++;
+                    world[groundRow][pCol] = 0;
+                    updateInventoryUI();
+                } else if (blockType === 2) { // Batu
+                    inventory.stone++;
+                    world[groundRow][pCol] = 0;
+                    updateInventoryUI();
                 }
             }
         });
@@ -176,14 +204,20 @@
 
         function update() {
             player.vx = 0;
-            if (keys.left) player.vx = -player.speed;
-            if (keys.right) player.vx = player.speed;
+            if (keys.left) {
+                player.vx = -player.speed;
+                player.direction = -1;
+            }
+            if (keys.right) {
+                player.vx = player.speed;
+                player.direction = 1;
+            }
 
             player.x += player.vx;
-
             if (player.x < 0) player.x = 0;
             if (player.x > mapWidth * tileSize - player.width) player.x = mapWidth * tileSize - player.width;
 
+            // Gravitasi
             player.vy += 0.4;
             player.y += player.vy;
             player.isGrounded = false;
@@ -193,7 +227,8 @@
             let bottomRow = Math.floor((player.y + player.height) / tileSize);
 
             if (bottomRow >= 0 && bottomRow < mapHeight) {
-                if ((world[bottomRow][leftCol] > 0) || (world[bottomRow][rightCol] > 0)) {
+                if ((world[bottomRow][leftCol] > 0 && world[bottomRow][leftCol] < 3) || 
+                    (world[bottomRow][rightCol] > 0 && world[bottomRow][rightCol] < 3)) {
                     player.y = bottomRow * tileSize - player.height;
                     player.vy = 0;
                     player.isGrounded = true;
@@ -211,34 +246,37 @@
             ctx.save();
             ctx.translate(-cameraX, 0);
 
-            // Gambar Dunia
+            // Gambar Dunia Blok
             for (let y = 0; y < mapHeight; y++) {
                 for (let x = 0; x < mapWidth; x++) {
                     let type = world[y][x];
                     if (type === 1) {
-                        ctx.fillStyle = "#8B4513";
+                        ctx.fillStyle = "#8B4513"; // Tanah
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
                         ctx.strokeStyle = "#5C3317";
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
                     } else if (type === 2) {
-                        ctx.fillStyle = "#708090";
+                        ctx.fillStyle = "#708090"; // Batu
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-                        ctx.strokeStyle = "#4f5d69";
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
                     } else if (type === 3) {
-                        ctx.fillStyle = "#228B22";
+                        ctx.fillStyle = "#5D4037"; // Batang Pohon Coklat Tua
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-                        ctx.strokeStyle = "#006400";
+                        ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                    } else if (type === 4) {
+                        ctx.fillStyle = "#228B22"; // Daun Pohon Hijau
+                        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
                     }
                 }
             }
 
-            // Gambar Karakter Gaya Semula (Kotak Merah dengan Mata Putih)
+            // Gambar Karakter Klasik (Kotak Merah dengan Mata Putih)
             ctx.fillStyle = "#ff3333";
             ctx.fillRect(player.x, player.y, player.width, player.height);
             ctx.fillStyle = "white";
-            ctx.fillRect(player.x + 18, player.y + 8, 6, 6);
+            let eyeX = player.direction === 1 ? player.x + 16 : player.x + 4;
+            ctx.fillRect(eyeX, player.y + 8, 6, 6);
 
             ctx.restore();
         }
@@ -253,3 +291,4 @@
     </script>
 </body>
 </html>
+
