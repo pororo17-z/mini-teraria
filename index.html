@@ -74,7 +74,6 @@
 
     <canvas id="gameCanvas" width="600" height="400"></canvas>
 
-    <!-- Kotak Inventori di Bagian Bawah -->
     <div class="ui-container">
         <div class="slot">🪵 Kayu <span id="inv-wood">0</span></div>
         <div class="slot">🪨 Batu <span id="inv-stone">0</span></div>
@@ -92,7 +91,6 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Dunia yang jauh lebih luas (60 kolom blok)
         const tileSize = 30;
         const mapWidth = 60; 
         const mapHeight = 15;
@@ -101,13 +99,13 @@
         for (let y = 0; y < mapHeight; y++) {
             let row = [];
             for (let x = 0; x < mapWidth; x++) {
-                if (y < 5) row.push(0); // Udara
-                else if (y === 5) {
-                    // Beri pohon secara berkala
-                    if (x % 8 === 0 && x > 5 && x < mapWidth - 5) row.push(3); // Pohon
-                    else row.push(1); // Tanah atas
+                if (y < 4) row.push(0); // Udara
+                else if (y === 4) {
+                    if (x % 8 === 0 && x > 5 && x < mapWidth - 5) row.push(3); // Batang Pohon
+                    else row.push(0);
                 }
-                else if (y < 10) row.push(1); // Tanah
+                else if (y === 5) row.push(1); // Tanah atas
+                else if (y < 10) row.push(1); // Tanah bawah
                 else row.push(2); // Batu
             }
             world.push(row);
@@ -116,8 +114,8 @@
         let player = {
             x: 100,
             y: 90,
-            width: 24,
-            height: 36,
+            width: 30,  // Ukuran dikembalikan seperti semula
+            height: 40,
             vx: 0,
             vy: 0,
             speed: 3,
@@ -125,11 +123,8 @@
         };
 
         let inventory = { wood: 0, stone: 0, dirt: 0 };
-
-        // Status Tombol untuk sistem Tahan (Hold)
         let keys = { left: false, right: false };
 
-        // Event Listener untuk Tombol Layar / Keyboard
         document.getElementById("btn-left").addEventListener("pointerdown", () => keys.left = true);
         document.getElementById("btn-left").addEventListener("pointerup", () => keys.left = false);
         document.getElementById("btn-left").addEventListener("pointerleave", () => keys.left = false);
@@ -149,12 +144,12 @@
             let pCol = Math.floor((player.x + player.width / 2) / tileSize);
             let pRow = Math.floor((player.y + player.height) / tileSize);
 
-            // Cek blok di sekitar pemain untuk ditebang/digali
             let targets = [
                 {r: pRow, c: pCol},
                 {r: pRow + 1, c: pCol},
                 {r: pRow, c: pCol + 1},
-                {r: pRow, c: pCol - 1}
+                {r: pRow, c: pCol - 1},
+                {r: pRow - 1, c: pCol}
             ];
 
             for (let t of targets) {
@@ -165,7 +160,7 @@
                         else if (blockType === 2) inventory.stone++;
                         else if (blockType === 1) inventory.dirt++;
 
-                        world[t.r][t.c] = 0; // Hapus blok jadi udara
+                        world[t.r][t.c] = 0;
                         updateInventoryUI();
                         break;
                     }
@@ -180,23 +175,19 @@
         }
 
         function update() {
-            // Gerakan Horizontal Berdasarkan Tahanan Tombol
             player.vx = 0;
             if (keys.left) player.vx = -player.speed;
             if (keys.right) player.vx = player.speed;
 
             player.x += player.vx;
 
-            // Batasan Map Kiri-Kanan
             if (player.x < 0) player.x = 0;
             if (player.x > mapWidth * tileSize - player.width) player.x = mapWidth * tileSize - player.width;
 
-            // Gravitasi & Fisika Vertikal
             player.vy += 0.4;
             player.y += player.vy;
             player.isGrounded = false;
 
-            // Deteksi Tabrakan Sederhana dengan Blok Dunia
             let leftCol = Math.floor(player.x / tileSize);
             let rightCol = Math.floor((player.x + player.width) / tileSize);
             let bottomRow = Math.floor((player.y + player.height) / tileSize);
@@ -213,7 +204,6 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Kamera Mengikuti Karakter (Scrolling Dunia Luas)
             let cameraX = player.x - canvas.width / 2 + player.width / 2;
             if (cameraX < 0) cameraX = 0;
             if (cameraX > mapWidth * tileSize - canvas.width) cameraX = mapWidth * tileSize - canvas.width;
@@ -221,22 +211,22 @@
             ctx.save();
             ctx.translate(-cameraX, 0);
 
-            // Gambar Dunia (Blok-blok)
+            // Gambar Dunia
             for (let y = 0; y < mapHeight; y++) {
                 for (let x = 0; x < mapWidth; x++) {
                     let type = world[y][x];
                     if (type === 1) {
-                        ctx.fillStyle = "#8B4513"; // Tanah Coklat
+                        ctx.fillStyle = "#8B4513";
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
                         ctx.strokeStyle = "#5C3317";
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
                     } else if (type === 2) {
-                        ctx.fillStyle = "#708090"; // Batu Abu-abu
+                        ctx.fillStyle = "#708090";
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
                         ctx.strokeStyle = "#4f5d69";
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
                     } else if (type === 3) {
-                        ctx.fillStyle = "#228B22"; // Daun / Pohon
+                        ctx.fillStyle = "#228B22";
                         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
                         ctx.strokeStyle = "#006400";
                         ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
@@ -244,12 +234,11 @@
                 }
             }
 
-            // Gambar Karakter Pemain
+            // Gambar Karakter Gaya Semula (Kotak Merah dengan Mata Putih)
             ctx.fillStyle = "#ff3333";
             ctx.fillRect(player.x, player.y, player.width, player.height);
-            // Mata karakter
             ctx.fillStyle = "white";
-            ctx.fillRect(player.x + 14, player.y + 6, 5, 5);
+            ctx.fillRect(player.x + 18, player.y + 8, 6, 6);
 
             ctx.restore();
         }
@@ -262,21 +251,5 @@
 
         loop();
     </script>
-</body>
-</html>
-.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  const pj=perspektif(mat4(),70*Math.PI/180,canvas.width/canvas.height,0.1,64);
-  const vw=lihat(mat4(),pemain.x,pemain.y+1.6,pemain.z,
-    pemain.x-Math.sin(pemain.ry)*Math.cos(pemain.rx),
-    pemain.y+1.6+Math.sin(pemain.rx),
-    pemain.z-Math.cos(pemain.ry)*Math.cos(pemain.rx),
-    0,1,0);
-  gl.uniformMatrix4fv(lok.pj,false,pj);
-  gl.uniformMatrix4fv(lok.v,false,vw);
-  Object.keys(dunia).forEach(k=>{const [x,y,z]=k.split(',').map(Number);gambarBlok(x,y,z,dunia[k]);});
-  requestAnimationFrame(lingkar);
-}
-lingkar();
-</script>
 </body>
 </html>
